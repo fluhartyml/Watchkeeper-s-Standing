@@ -15,8 +15,8 @@ final class LogEntry {
     var hour: Int
     var title: String?
     var logBody: String?
-    var receiptBody: String?
-    var hasReceiptDiverged: Bool
+    var fairCopyBody: String?
+    var hasFairCopyDiverged: Bool
     var latitude: Double?
     var longitude: Double?
     @Attribute(.externalStorage) var heroImageData: Data?
@@ -28,14 +28,14 @@ final class LogEntry {
         self.id = UUID()
         self.date = Calendar.current.startOfDay(for: date)
         self.hour = hour
-        self.hasReceiptDiverged = false
+        self.hasFairCopyDiverged = false
         self.createdAt = Date()
         self.modifiedAt = Date()
     }
 
-    var displayReceiptBody: String {
-        if hasReceiptDiverged {
-            return receiptBody ?? ""
+    var displayFairCopyBody: String {
+        if hasFairCopyDiverged {
+            return fairCopyBody ?? ""
         } else {
             return logBody ?? ""
         }

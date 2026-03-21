@@ -1,5 +1,5 @@
 //
-//  ReceiptPanelView.swift
+//  FairCopyPanelView.swift
 //  Watchkeeper's Standing
 //
 //  Created by Michael Fluharty on 3/21/26.
@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 import PhotosUI
 
-struct ReceiptPanelView: View {
+struct FairCopyPanelView: View {
     @Environment(\.modelContext) private var modelContext
     let selectedDate: Date
     @Binding var selectedHour: Int?
@@ -28,7 +28,7 @@ struct ReceiptPanelView: View {
             panelHeader
 
             if let entry = entry {
-                ReceiptEntryView(entry: entry)
+                FairCopyEntryView(entry: entry)
             } else {
                 emptyState
             }
@@ -45,21 +45,21 @@ struct ReceiptPanelView: View {
         HStack {
             Image(systemName: "doc.text")
                 .foregroundStyle(.secondary)
-            Text("RECEIPT")
+            Text("FAIR COPY")
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundStyle(.secondary)
                 .tracking(2)
             Spacer()
             if let entry = entry {
-                Text(entry.hasReceiptDiverged ? "DIVERGED" : "MIRRORING")
+                Text(entry.hasFairCopyDiverged ? "DIVERGED" : "MIRRORING")
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundStyle(entry.hasReceiptDiverged ? .orange : .green)
+                    .foregroundStyle(entry.hasFairCopyDiverged ? .orange : .green)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(
                         Capsule()
-                            .fill(entry.hasReceiptDiverged
+                            .fill(entry.hasFairCopyDiverged
                                   ? Color.orange.opacity(0.12)
                                   : Color.green.opacity(0.12))
                     )
@@ -82,16 +82,15 @@ struct ReceiptPanelView: View {
     }
 }
 
-struct ReceiptEntryView: View {
+struct FairCopyEntryView: View {
     @Bindable var entry: LogEntry
-    @State private var receiptText: String = ""
+    @State private var fairCopyText: String = ""
     @State private var titleText: String = ""
     @State private var selectedPhoto: PhotosPickerItem?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                // Hour and title
                 HStack {
                     Text(entry.hourDisplay)
                         .font(.system(.title3, design: .monospaced))
@@ -110,24 +109,22 @@ struct ReceiptEntryView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
 
-                // Hero image slot
                 heroImageSection
                     .padding(.horizontal, 16)
 
-                // Receipt body
-                TextEditor(text: $receiptText)
+                TextEditor(text: $fairCopyText)
                     .font(.body)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 200)
                     .padding(.horizontal, 12)
-                    .onChange(of: receiptText) { _, newValue in
-                        if !entry.hasReceiptDiverged {
+                    .onChange(of: fairCopyText) { _, newValue in
+                        if !entry.hasFairCopyDiverged {
                             if newValue != (entry.logBody ?? "") {
-                                entry.hasReceiptDiverged = true
-                                entry.receiptBody = newValue
+                                entry.hasFairCopyDiverged = true
+                                entry.fairCopyBody = newValue
                             }
                         } else {
-                            entry.receiptBody = newValue
+                            entry.fairCopyBody = newValue
                         }
                         entry.modifiedAt = Date()
                     }
@@ -138,8 +135,8 @@ struct ReceiptEntryView: View {
         .onAppear { loadContent() }
         .onChange(of: entry.id) { _, _ in loadContent() }
         .onChange(of: entry.logBody) { _, newValue in
-            if !entry.hasReceiptDiverged {
-                receiptText = newValue ?? ""
+            if !entry.hasFairCopyDiverged {
+                fairCopyText = newValue ?? ""
             }
         }
     }
@@ -147,8 +144,8 @@ struct ReceiptEntryView: View {
     private var heroImageSection: some View {
         VStack(spacing: 0) {
             if let imageData = entry.heroImageData,
-               let nsImage = PlatformImage(data: imageData) {
-                Image(platformImage: nsImage)
+               let image = PlatformImage(data: imageData) {
+                Image(platformImage: image)
                     .resizable()
                     .scaledToFill()
                     .frame(maxWidth: .infinity)
@@ -203,7 +200,7 @@ struct ReceiptEntryView: View {
 
     private func loadContent() {
         titleText = entry.title ?? ""
-        receiptText = entry.displayReceiptBody
+        fairCopyText = entry.displayFairCopyBody
     }
 }
 

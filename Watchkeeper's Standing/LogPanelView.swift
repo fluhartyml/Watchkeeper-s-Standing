@@ -7,12 +7,23 @@
 
 import SwiftUI
 import SwiftData
+import Combine
 
 struct LogPanelView: View {
     @Environment(\.modelContext) private var modelContext
     let selectedDate: Date
     @Binding var selectedHour: Int?
+    @Binding var use24HourFormat: Bool
     @Query private var allEntries: [LogEntry]
+
+    @State private var currentMinute: Int = Calendar.current.component(.minute, from: Date())
+    @State private var currentHour: Int = Calendar.current.component(.hour, from: Date())
+
+    private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+
+    private var isToday: Bool {
+        Calendar.current.isDateInToday(selectedDate)
+    }
 
     private var entries: [LogEntry] {
         let start = Calendar.current.startOfDay(for: selectedDate)
@@ -32,7 +43,12 @@ struct LogPanelView: View {
                     HourlyLineView(
                         hour: hour,
                         entry: entry(for: hour),
-                        isSelected: selectedHour == hour
+                        isSelected: selectedHour == hour,
+                        use24HourFormat: use24HourFormat,
+                        isCurrentHour: isToday && hour == currentHour,
+                        minuteProgress: isToday && hour == currentHour
+                            ? Double(currentMinute) / 60.0
+                            : nil
                     )
                     .id(hour)
                     .contentShape(Rectangle())
@@ -40,7 +56,7 @@ struct LogPanelView: View {
                         selectedHour = hour
                         ensureEntry(for: hour)
                     }
-                    .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
+                    .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
                     .listRowBackground(
                         selectedHour == hour
                             ? Color.accentColor.opacity(0.12)
@@ -48,6 +64,11 @@ struct LogPanelView: View {
                     )
                 }
                 .listStyle(.plain)
+                .onAppear {
+                    if isToday {
+                        proxy.scrollTo(currentHour, anchor: .center)
+                    }
+                }
                 .onChange(of: selectedHour) { _, newHour in
                     if let h = newHour {
                         withAnimation {
@@ -63,6 +84,10 @@ struct LogPanelView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
         )
+        .onReceive(timer) { _ in
+            currentMinute = Calendar.current.component(.minute, from: Date())
+            currentHour = Calendar.current.component(.hour, from: Date())
+        }
     }
 
     private var panelHeader: some View {
@@ -74,11 +99,42 @@ struct LogPanelView: View {
                 .fontWeight(.semibold)
                 .foregroundStyle(.secondary)
                 .tracking(2)
+
             Spacer()
+
+            if isToday {
+                Text(currentTimeString)
+                    .font(.system(.caption, design: .monospaced))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.red)
+            }
+
+            Spacer()
+
+            Button {
+                use24HourFormat.toggle()
+            } label: {
+                Text(use24HourFormat ? "24H" : "12H")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule()
+                            .fill(Color.secondary.opacity(0.12))
+                    )
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color(.secondarySystemBackground))
+    }
+
+    private var currentTimeString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = use24HourFormat ? "HH:mm" : "h:mm a"
+        return formatter.string(from: Date())
     }
 
     private func ensureEntry(for hour: Int) {
@@ -93,53 +149,79 @@ struct HourlyLineView: View {
     let hour: Int
     let entry: LogEntry?
     let isSelected: Bool
+    let use24HourFormat: Bool
+    let isCurrentHour: Bool
+    let minuteProgress: Double?
 
     private var hourLabel: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH"
-        var components = DateComponents()
-        components.hour = hour
-        let date = Calendar.current.date(from: components) ?? Date()
-        return formatter.string(from: date)
+        if use24HourFormat {
+            return String(format: "%02d", hour)
+        } else {
+            let displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour)
+            let suffix = hour < 12 ? "a" : "p"
+            return "\(displayHour)\(suffix)"
+        }
     }
 
+    private let rowHeight: CGFloat = 60
+
     var body: some View {
-        HStack(spacing: 8) {
-            Text(hourLabel)
-                .font(.system(.caption, design: .monospaced))
-                .fontWeight(.medium)
-                .foregroundStyle(.tertiary)
-                .frame(width: 24, alignment: .trailing)
+        ZStack(alignment: .topLeading) {
+            // Main row content
+            HStack(spacing: 8) {
+                Text(hourLabel)
+                    .font(.system(.caption, design: .monospaced))
+                    .fontWeight(isCurrentHour ? .bold : .medium)
+                    .foregroundStyle(isCurrentHour ? AnyShapeStyle(.red) : AnyShapeStyle(.tertiary))
+                    .frame(width: use24HourFormat ? 24 : 30, alignment: .trailing)
 
-            Rectangle()
-                .fill(Color.secondary.opacity(0.15))
-                .frame(width: 1)
-                .frame(maxHeight: .infinity)
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.15))
+                    .frame(width: 1)
+                    .frame(maxHeight: .infinity)
 
-            if let entry = entry, entry.hasContent {
-                HStack(spacing: 6) {
-                    if let title = entry.title, !title.isEmpty {
-                        Text(title)
-                            .font(.system(.body, design: .default))
-                            .fontWeight(.medium)
-                            .lineLimit(1)
+                if let entry = entry, entry.hasContent {
+                    HStack(spacing: 6) {
+                        if let title = entry.title, !title.isEmpty {
+                            Text(title)
+                                .font(.system(.body, design: .default))
+                                .fontWeight(.medium)
+                                .lineLimit(1)
+                        }
+                        if let body = entry.logBody, !body.isEmpty {
+                            Text(body)
+                                .font(.system(.body, design: .default))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
-                    if let body = entry.logBody, !body.isEmpty {
-                        Text(body)
-                            .font(.system(.body, design: .default))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    }
+                } else {
+                    Color.clear
+                        .frame(height: 1)
                 }
-            } else {
-                Color.clear
-                    .frame(height: 1)
-            }
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
+            .frame(height: rowHeight)
+
+            // Red "now" line
+            if let progress = minuteProgress {
+                GeometryReader { geo in
+                    let yOffset = progress * geo.size.height
+                    Rectangle()
+                        .fill(Color.red)
+                        .frame(height: 2)
+                        .offset(y: yOffset)
+
+                    // Red dot on the left edge
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                        .offset(x: -4, y: yOffset - 3)
+                }
+            }
         }
-        .frame(minHeight: 32)
-        .padding(.vertical, 2)
+        .frame(height: rowHeight)
     }
 }

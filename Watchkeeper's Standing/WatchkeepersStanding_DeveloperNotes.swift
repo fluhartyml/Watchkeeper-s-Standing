@@ -20,8 +20,8 @@
  ═══════════════════════════════════════════════════════════════
 
  Personal logbook structured by the clock. 24 hourly slots per day —
- write or don't. Two-pane system: Log (raw capture) and Receipt
- (curated memory). Receipt mirrors Log until edited, then diverges
+ write or don't. Two-pane system: Log (raw capture) and Fair Copy
+ (curated memory). Fair Copy mirrors Log until edited, then diverges
  permanently. Both versions preserved.
 
  The name comes from maritime tradition — the watchkeeper is the
@@ -38,12 +38,12 @@
  ├── hour: Int (0-23)              — the only mandatory anchor
  ├── title: String?
  ├── logBody: String?              — raw capture text
- ├── receiptBody: String?          — curated text (nil = still mirroring)
- ├── hasReceiptDiverged: Bool      — false until receipt is edited
+ ├── fairCopyBody: String?         — curated text (nil = still mirroring)
+ ├── hasFairCopyDiverged: Bool     — false until fair copy is edited
  ├── latitude: Double?
  ├── longitude: Double?
- ├── heroImageData: Data?          — receipt pane only
- ├── audioFileURL: String?         — receipt pane only
+ ├── heroImageData: Data?          — fair copy pane only
+ ├── audioFileURL: String?         — fair copy pane only
  ├── createdAt: Date
  └── modifiedAt: Date
 
@@ -56,7 +56,7 @@
  ┌─────────────┬─────────────┐
  │     Map     │  Calendar   │
  ├─────────────┼─────────────┤
- │     Log     │   Receipt   │
+ │     Log     │ Fair Copy   │
  └─────────────┴─────────────┘
 
  Default layout shown above. User can drag to rearrange any panel
@@ -65,12 +65,12 @@
  1) Map Panel — Dead Reckoning Track
     - MapKit, MKPolyline for chronological GPS path
     - MKAnnotation pins for entries with location
-    - Tap pin → navigates Log and Receipt to that entry
+    - Tap pin → navigates Log and Fair Copy to that entry
     - Over time: geographic record of movement
 
  2) Calendar Panel — Date Navigation
     - Date picker, visual indicators for days with entries
-    - Tap date → loads that day in Log and Receipt
+    - Tap date → loads that day in Log and Fair Copy
 
  3) Log Panel — Primary Writing Interface
     - 24 hourly lines per day
@@ -79,7 +79,7 @@
     - Tap line → open entry for editing
     - Blank hours show empty lines (present, waiting, never demanding)
 
- 4) Receipt Panel — Memory Layer
+ 4) Fair Copy Panel — Memory Layer
     - Mirrors log entry until edited, then diverges permanently
     - Full rich text display (carriage returns, paragraphs)
     - Hero image slot (top, between title and body)
@@ -96,9 +96,9 @@
    - Tapping opens full editor
 
  Mirror/Diverge Mechanic:
-   - Receipt reads from logBody while hasReceiptDiverged == false
-   - First edit to receipt: copy logBody → receiptBody, set flag true
-   - Log edits never propagate to a diverged receipt
+   - Fair copy reads from logBody while hasFairCopyDiverged == false
+   - First edit to fair copy: copy logBody → fairCopyBody, set flag true
+   - Log edits never propagate to a diverged fair copy
    - Visual indicator distinguishes mirror vs diverged state
 
  Dead Reckoning Map:
@@ -107,13 +107,13 @@
    - Tap pin → navigate other panels to that entry
 
  Hero Image:
-   - Fixed slot in receipt between title and body — layout never reflows
+   - Fixed slot in fair copy between title and body — layout never reflows
    - Empty placeholder with subtle "Insert Image" affordance
    - PhotosPicker for selection
 
  Media Separation:
    - Log pane = pure text only (capture mode)
-   - Receipt pane = rich text + hero image + audio (memory mode)
+   - Fair copy pane = rich text + hero image + audio (memory mode)
 
  Writing Tools:
    - No built-in AI summarization or paraphrasing
@@ -127,7 +127,7 @@
  - MapKit           (map panel, polyline, annotations)
  - CoreLocation     (GPS stamping on entry creation)
  - PhotosUI         (PhotosPicker for hero image)
- - AVFoundation     (audio recording/playback in receipt)
+ - AVFoundation     (audio recording/playback in fair copy)
  - SwiftUI          (all UI)
 
  ═══════════════════════════════════════════════════════════════
@@ -135,7 +135,7 @@
  ═══════════════════════════════════════════════════════════════
 
  - NSLocationWhenInUseUsageDescription  — geo-stamp entries
- - NSMicrophoneUsageDescription         — audio recording in receipt
+ - NSMicrophoneUsageDescription         — audio recording in fair copy
  - NSPhotoLibraryUsageDescription       — hero image selection
 
  ═══════════════════════════════════════════════════════════════
@@ -155,7 +155,7 @@
  iPhone:
    - Single panel at a time or two-panel split
    - Swipe or tab navigation between panels
-   - Log + Receipt as primary pair, Map + Calendar as secondary
+   - Log + Fair Copy as primary pair, Map + Calendar as secondary
 
  ═══════════════════════════════════════════════════════════════
  SHAKEDOWN PLAN — MAC
@@ -168,17 +168,17 @@
    [ ] Create entries across multiple hours — verify ordering
    [ ] Verify compound key constraint (one entry per hour per day)
 
- Phase 2 — Receipt / Mirror-Diverge
-   [ ] Write log entry — verify receipt mirrors it exactly
-   [ ] Edit receipt — verify it diverges and flag flips
-   [ ] Edit log after diverge — verify receipt is unchanged
+ Phase 2 — Fair Copy / Mirror-Diverge
+   [ ] Write log entry — verify fair copy mirrors it exactly
+   [ ] Edit fair copy — verify it diverges and flag flips
+   [ ] Edit log after diverge — verify fair copy is unchanged
    [ ] Verify visual indicator for mirror vs diverged state
-   [ ] Add hero image to receipt — verify display and placeholder behavior
-   [ ] Add audio to receipt — verify playback
+   [ ] Add hero image to fair copy — verify display and placeholder behavior
+   [ ] Add audio to fair copy — verify playback
    [ ] Verify log pane stays pure text (no media)
 
  Phase 3 — Calendar Panel
-   [ ] Navigate to different dates — verify log/receipt update
+   [ ] Navigate to different dates — verify log/fair copy update
    [ ] Verify visual indicators on days with entries
    [ ] Verify days without entries show no indicator
    [ ] Navigate to blank day — verify 24 empty hourly lines
@@ -197,7 +197,7 @@
 
  Phase 6 — Search & Navigation
    [ ] Full-text search across log entries
-   [ ] Full-text search across receipt entries
+   [ ] Full-text search across fair copy entries
    [ ] Navigate by location from map
    [ ] Navigate by date from calendar
 
@@ -216,7 +216,7 @@
    [ ] Verify keyboard appears for log entry editing
    [ ] Test with external keyboard attached
 
- Phase 2 — Receipt / Mirror-Diverge
+ Phase 2 — Fair Copy / Mirror-Diverge
    [ ] All Mac Phase 2 tests repeated on iPad
    [ ] Hero image via PhotosPicker — verify camera roll access
    [ ] Audio recording — verify microphone permission prompt
@@ -235,7 +235,7 @@
 
  Phase 5 — iCloud Sync
    [ ] Create entry on iPad — verify appears on Mac
-   [ ] Edit receipt on Mac — verify diverged state syncs to iPad
+   [ ] Edit fair copy on Mac — verify diverged state syncs to iPad
    [ ] Add hero image on iPad — verify syncs to Mac
 
  ═══════════════════════════════════════════════════════════════
@@ -248,14 +248,14 @@
    [ ] Verify swipe/tab navigation between panels
    [ ] Verify hourly line tap targets work on small screen
 
- Phase 2 — Receipt / Mirror-Diverge
+ Phase 2 — Fair Copy / Mirror-Diverge
    [ ] All Mac Phase 2 tests repeated on iPhone
    [ ] Hero image from camera (not just photo library)
    [ ] Audio recording on iPhone
 
  Phase 3 — Panel Navigation (iPhone-specific)
    [ ] Verify panel switching is intuitive (swipe, tabs, or segmented control)
-   [ ] Log + Receipt as primary pair — verify side-by-side or stacked
+   [ ] Log + Fair Copy as primary pair — verify side-by-side or stacked
    [ ] Map panel — verify usable on phone screen
    [ ] Calendar panel — verify date selection works at phone size
    [ ] Verify no panel arrangement drag on iPhone (fixed layout)
@@ -274,7 +274,7 @@
  KNOWN OPEN QUESTIONS
  ═══════════════════════════════════════════════════════════════
 
- - Receipt scope: daily vs user-defined (per week/trip/project) — data model TBD
+ - Fair copy scope: daily vs user-defined (per week/trip/project) — data model TBD
  - Export formats: plain text, PDF, share sheet — not yet designed
  - App icon and visual identity — not yet decided
  - Panel arrangement persistence: per-device or synced via iCloud?
@@ -286,5 +286,8 @@
  ═══════════════════════════════════════════════════════════════
 
  2026-03-21: Initial developer notes created from concept document
+ 2026-03-21: Renamed "Receipt" to "Fair Copy" throughout codebase and docs
+ 2026-03-21: Added live time red line indicator (proportional within current hour row)
+ 2026-03-21: Added 24H/12H time format toggle in Log panel header
 
  */

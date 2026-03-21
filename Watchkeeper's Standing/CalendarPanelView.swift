@@ -78,7 +78,7 @@ struct CalendarPanelView: View {
         let dayEntries = allEntries.filter {
             Calendar.current.isDate($0.date, inSameDayAs: start) && $0.hasContent
         }
-        let divergedCount = dayEntries.filter { $0.hasReceiptDiverged }.count
+        let divergedCount = dayEntries.filter { $0.hasFairCopyDiverged }.count
 
         return VStack(alignment: .leading, spacing: 4) {
             let dateFormatter: DateFormatter = {
