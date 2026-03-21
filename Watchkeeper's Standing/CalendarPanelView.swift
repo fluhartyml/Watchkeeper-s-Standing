@@ -59,7 +59,6 @@ struct CalendarPanelView: View {
                 .fontWeight(.semibold)
                 .foregroundStyle(.secondary)
                 .tracking(2)
-            Spacer()
             Button {
                 selectedDate = Date()
             } label: {
@@ -67,6 +66,7 @@ struct CalendarPanelView: View {
                     .font(.caption)
                     .fontWeight(.medium)
             }
+            Spacer()
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

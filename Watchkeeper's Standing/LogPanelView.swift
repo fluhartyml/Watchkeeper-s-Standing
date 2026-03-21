@@ -100,17 +100,6 @@ struct LogPanelView: View {
                 .foregroundStyle(.secondary)
                 .tracking(2)
 
-            Spacer()
-
-            if isToday {
-                Text(currentTimeString)
-                    .font(.system(.caption, design: .monospaced))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.red)
-            }
-
-            Spacer()
-
             Button {
                 use24HourFormat.toggle()
             } label: {
@@ -125,6 +114,17 @@ struct LogPanelView: View {
                     )
             }
             .buttonStyle(.plain)
+
+            Spacer()
+
+            if isToday {
+                Text(currentTimeString)
+                    .font(.system(.caption, design: .monospaced))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.red)
+            }
+
+            Spacer()
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

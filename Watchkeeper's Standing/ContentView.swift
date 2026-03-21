@@ -122,19 +122,19 @@ struct ContentView: View {
         let panelType = panelLayout[index]
         let isDropTarget = dropTargetIndex == index && draggingPanel != nil && draggingPanel != panelType
 
-        return ZStack(alignment: .topLeading) {
+        return ZStack(alignment: .topTrailing) {
             panelView(for: panelType)
                 .frame(width: width, height: height)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(isDropTarget ? Color.accentColor : Color.clear, lineWidth: 3)
-                )
-                .opacity(draggingPanel == panelType ? 0.5 : 1.0)
 
-            // Drag-to-rearrange grabber
             grabberHandle(for: panelType)
-                .padding(6)
+                .padding(.top, 4)
+                .padding(.trailing, 6)
         }
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isDropTarget ? Color.accentColor : Color.clear, lineWidth: 3)
+        )
+        .opacity(draggingPanel == panelType ? 0.5 : 1.0)
         .onDrop(of: [.text], delegate: PanelDropDelegate(
             index: index,
             panelLayout: $panelLayout,
@@ -205,10 +205,10 @@ struct ContentView: View {
 
     private func grabberHandle(for panel: PanelType) -> some View {
         Image(systemName: "line.3.horizontal")
-            .font(.system(size: 14, weight: .bold))
+            .font(.system(size: 11, weight: .bold))
             .foregroundStyle(.secondary.opacity(0.6))
-            .padding(6)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 6))
+            .padding(4)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 4))
             .onDrag {
                 draggingPanel = panel
                 return NSItemProvider(object: panel.rawValue as NSString)
