@@ -51,7 +51,9 @@ struct FairCopyPanelView: View {
                 .foregroundStyle(.secondary)
                 .tracking(2)
             Spacer()
+
             if let entry = entry {
+                // Diverge status badge
                 Text(entry.hasFairCopyDiverged ? "DIVERGED" : "MIRRORING")
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundStyle(entry.hasFairCopyDiverged ? .orange : .green)
@@ -84,13 +86,22 @@ struct FairCopyPanelView: View {
 
 struct FairCopyEntryView: View {
     @Bindable var entry: LogEntry
-    @State private var fairCopyText: String = ""
+    @State private var bodyText: String = ""
     @State private var titleText: String = ""
     @State private var selectedPhoto: PhotosPickerItem?
+    @FocusState private var bodyFocused: Bool
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                // Date header
+                Text(dateHeader)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+
+                // Title row: hour + editable title
                 HStack {
                     Text(entry.hourDisplay)
                         .font(.system(.title3, design: .monospaced))
@@ -105,41 +116,79 @@ struct FairCopyEntryView: View {
                             entry.title = newValue.isEmpty ? nil : newValue
                             entry.modifiedAt = Date()
                         }
+                        .onSubmit {
+                            // Return → jump to body
+                            bodyFocused = true
+                        }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 12)
 
+                // Hero image slot — always present
                 heroImageSection
                     .padding(.horizontal, 16)
 
-                TextEditor(text: $fairCopyText)
+                // Body text — shared with Log, full display here
+                TextEditor(text: $bodyText)
                     .font(.body)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 200)
                     .padding(.horizontal, 12)
-                    .onChange(of: fairCopyText) { _, newValue in
-                        if !entry.hasFairCopyDiverged {
-                            if newValue != (entry.logBody ?? "") {
-                                entry.hasFairCopyDiverged = true
-                                entry.fairCopyBody = newValue
-                            }
-                        } else {
+                    .focused($bodyFocused)
+                    .onChange(of: bodyText) { _, newValue in
+                        if entry.hasFairCopyDiverged {
                             entry.fairCopyBody = newValue
+                        } else {
+                            // Shared body — writes to logBody, syncs to Log pane
+                            entry.logBody = newValue.isEmpty ? nil : newValue
                         }
                         entry.modifiedAt = Date()
                     }
+
+                // Geo location display
+                if let lat = entry.latitude, let lon = entry.longitude {
+                    geoLocationRow(lat: lat, lon: lon)
+                        .padding(.horizontal, 16)
+                }
+
+                // Media slot placeholder
+                mediaSection
+                    .padding(.horizontal, 16)
+
+                // Perforation button
+                perforationButton
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
 
                 Spacer()
             }
         }
         .onAppear { loadContent() }
         .onChange(of: entry.id) { _, _ in loadContent() }
+        // Live sync: when logBody changes externally (typed in Log), update body here
         .onChange(of: entry.logBody) { _, newValue in
             if !entry.hasFairCopyDiverged {
-                fairCopyText = newValue ?? ""
+                let incoming = newValue ?? ""
+                if bodyText != incoming {
+                    bodyText = incoming
+                }
+            }
+        }
+        // Live sync: title typed in Log pane
+        .onChange(of: entry.title) { _, newValue in
+            let incoming = newValue ?? ""
+            if titleText != incoming {
+                titleText = incoming
             }
         }
     }
+
+    private var dateHeader: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMM d yyyy"
+        return formatter.string(from: entry.date)
+    }
+
+    // MARK: - Hero Image
 
     private var heroImageSection: some View {
         VStack(spacing: 0) {
@@ -168,11 +217,11 @@ struct FairCopyEntryView: View {
                 PhotosPicker(selection: $selectedPhoto, matching: .images) {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.secondary.opacity(0.06))
-                        .frame(height: 120)
+                        .frame(height: 60)
                         .overlay(
-                            VStack(spacing: 6) {
+                            HStack(spacing: 6) {
                                 Image(systemName: "photo.badge.plus")
-                                    .font(.title2)
+                                    .font(.caption)
                                     .foregroundStyle(.tertiary)
                                 Text("Insert Image")
                                     .font(.caption)
@@ -198,9 +247,114 @@ struct FairCopyEntryView: View {
         }
     }
 
+    // MARK: - Geo Location
+
+    private func geoLocationRow(lat: Double, lon: Double) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "location.fill")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(String(format: "%.4f, %.4f", lat, lon))
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Media
+
+    private var mediaSection: some View {
+        Group {
+            if entry.mediaFileURL != nil {
+                HStack(spacing: 6) {
+                    Image(systemName: entry.mediaType == "video" ? "video.fill" : "waveform")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(entry.mediaType == "video" ? "Video attached" : "Audio attached")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        entry.mediaFileURL = nil
+                        entry.mediaType = nil
+                        entry.modifiedAt = Date()
+                    } label: {
+                        Image(systemName: "xmark.circle")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.secondary.opacity(0.06))
+                )
+            } else {
+                HStack(spacing: 12) {
+                    Button {
+                        // Audio recording — placeholder for now
+                    } label: {
+                        Label("Record Audio", systemImage: "mic")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        // Video recording — placeholder for now
+                    } label: {
+                        Label("Record Video", systemImage: "video")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.secondary.opacity(0.04))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [6]))
+                                .foregroundStyle(Color.secondary.opacity(0.15))
+                        )
+                )
+            }
+        }
+    }
+
+    // MARK: - Perforation
+
+    private var perforationButton: some View {
+        Button {
+            // Perforate — seal current Fair Copy run
+            // This will be wired to the FairCopyRun model
+        } label: {
+            HStack {
+                Spacer()
+                Image(systemName: "scissors")
+                    .font(.caption)
+                Text("Perforate")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                Spacer()
+            }
+            .foregroundStyle(.secondary)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [8, 4]))
+                    .foregroundStyle(Color.secondary.opacity(0.3))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private func loadContent() {
         titleText = entry.title ?? ""
-        fairCopyText = entry.displayFairCopyBody
+        bodyText = entry.displayFairCopyBody
     }
 }
 

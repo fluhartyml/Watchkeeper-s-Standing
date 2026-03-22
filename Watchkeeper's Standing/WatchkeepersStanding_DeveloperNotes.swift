@@ -43,11 +43,26 @@
  ├── latitude: Double?
  ├── longitude: Double?
  ├── heroImageData: Data?          — fair copy pane only
- ├── audioFileURL: String?         — fair copy pane only
+ ├── mediaFileURL: String?         — audio or video, fair copy pane only
+ ├── mediaType: String?            — "audio" or "video"
  ├── createdAt: Date
  └── modifiedAt: Date
 
  Unique constraint: compound key on (date, hour) — one entry per hour per day.
+
+ FairCopyRun (SwiftData @Model)
+ ├── id: UUID
+ ├── entries: [LogEntry]           — ordered list of hourly entries in this run
+ ├── isOpen: Bool                  — true until author perforates (closes)
+ ├── openedAt: Date
+ └── closedAt: Date?
+
+ The Fair Copy is a continuous roll of receipt paper. The author writes
+ entries and they accumulate into the current open FairCopyRun. When the
+ author "perforates" (closes) the run, everything above the tear is sealed
+ and a new FairCopyRun begins. Runs can span hours, days, or years — the
+ author decides when to tear. Perforation can also be applied retroactively
+ to split a long run after the fact.
 
  ═══════════════════════════════════════════════════════════════
  LAYOUT — FOUR PANELS (2x2 GRID)
@@ -60,7 +75,12 @@
  └─────────────┴─────────────┘
 
  Default layout shown above. User can drag to rearrange any panel
- into any slot. Panels can be collapsed when not needed.
+ into any slot. All four panels are always visible — no collapse.
+ Panel arrangement synced across devices via iCloud.
+
+ Future upgrade: if user base requests it, allow closing panels.
+ One closed panel → placeholder fills vacancy. Two closed panels →
+ grid reflows from 2x2 to 1x2.
 
  1) Map Panel — Dead Reckoning Track
     - MapKit, MKPolyline for chronological GPS path
@@ -72,19 +92,31 @@
     - Date picker, visual indicators for days with entries
     - Tap date → loads that day in Log and Fair Copy
 
- 3) Log Panel — Primary Writing Interface
+ 3) Log Panel — Table of Contents / Navigation Index
     - 24 hourly lines per day
     - Each line: title + truncated single-line preview (ellipsis)
-    - Single-line display is deliberate — capture, not re-reading
-    - Tap line → open entry for editing
+    - Single-line display is deliberate — the log is an index, not a reading surface
+    - Two entry paths:
+      a) Type title in Log line, hit Return → cursor jumps to Fair Copy body
+      b) Tap empty hour in Log → Fair Copy opens blank entry with timestamp
+    - Title syncs live between Log and Fair Copy (character by character)
     - Blank hours show empty lines (present, waiting, never demanding)
 
- 4) Fair Copy Panel — Memory Layer
+ 4) Fair Copy Panel — Memory Layer / Primary Writing Surface
+    - Where the actual writing happens (title, body, images, media)
     - Mirrors log entry until edited, then diverges permanently
     - Full rich text display (carriage returns, paragraphs)
-    - Hero image slot (top, between title and body)
-    - Audio playback
+    - Per-entry layout:
+      [ Title                    ]
+      [ Hero Image / Placeholder ]  — image optional, placeholder always present
+      [ Journal Entry text...    ]  — or video journal, or dictation, or nothing
+      [ Geo Location             ]
+      [ Media: audio or video    ]  — optional, front/rear camera or audio-only
+    - Video thumbnail can supplement or replace the hero image
     - Can become the source of truth
+    - Continuous "receipt paper" — entries accumulate into a FairCopyRun
+    - Author perforates (closes) a run to seal it and start a new one
+    - Perforation can be applied retroactively to split long runs
 
  ═══════════════════════════════════════════════════════════════
  KEY IMPLEMENTATION DETAILS
@@ -93,12 +125,22 @@
  Single-Line Log Entry:
    - TextField with .lineLimit(1) and .truncationMode(.tail)
    - Conceptually one infinitely long line — no word wrap
-   - Tapping opens full editor
+   - Log is a table of contents / navigation index
+   - Title typed in Log syncs character-by-character to Fair Copy (and vice versa)
+   - Return key in Log jumps cursor to Fair Copy body (below hero image placeholder)
+
+ Shared Body Text:
+   - There is ONE body of text per entry — not two separate fields
+   - Both panes are live writing surfaces for the same text
+   - Type in Log → appears in Fair Copy. Type in Fair Copy → appears in Log.
+   - The only difference is DISPLAY: Log truncates to single line, Fair Copy shows full text
+   - Title also syncs character-by-character between both panes
 
  Mirror/Diverge Mechanic:
-   - Fair copy reads from logBody while hasFairCopyDiverged == false
-   - First edit to fair copy: copy logBody → fairCopyBody, set flag true
-   - Log edits never propagate to a diverged fair copy
+   - The diverge mechanic applies when the author explicitly edits the
+     Fair Copy to CREATE a curated version separate from the raw entry
+   - Once diverged, the Fair Copy has its own independent body text
+   - The log retains the original raw text
    - Visual indicator distinguishes mirror vs diverged state
 
  Dead Reckoning Map:
@@ -110,10 +152,13 @@
    - Fixed slot in fair copy between title and body — layout never reflows
    - Empty placeholder with subtle "Insert Image" affordance
    - PhotosPicker for selection
+   - Video thumbnail can supplement or replace the hero image
 
- Media Separation:
+ Media:
    - Log pane = pure text only (capture mode)
-   - Fair copy pane = rich text + hero image + audio (memory mode)
+   - Fair copy pane = rich text + hero image + audio/video (memory mode)
+   - Media attachment supports: audio-only, video (front/rear/Mac webcam)
+   - Input methods: typing, dictation, camera — the app doesn't care how content arrives
 
  Writing Tools:
    - No built-in AI summarization or paraphrasing
@@ -127,7 +172,8 @@
  - MapKit           (map panel, polyline, annotations)
  - CoreLocation     (GPS stamping on entry creation)
  - PhotosUI         (PhotosPicker for hero image)
- - AVFoundation     (audio recording/playback in fair copy)
+ - AVFoundation     (audio/video recording and playback in fair copy)
+ - AVKit            (video player UI)
  - SwiftUI          (all UI)
 
  ═══════════════════════════════════════════════════════════════
@@ -135,27 +181,28 @@
  ═══════════════════════════════════════════════════════════════
 
  - NSLocationWhenInUseUsageDescription  — geo-stamp entries
- - NSMicrophoneUsageDescription         — audio recording in fair copy
+ - NSMicrophoneUsageDescription         — audio/video recording in fair copy
+ - NSCameraUsageDescription             — video journal recording (front/rear)
  - NSPhotoLibraryUsageDescription       — hero image selection
 
  ═══════════════════════════════════════════════════════════════
  PLATFORM BEHAVIOR
  ═══════════════════════════════════════════════════════════════
 
- iPad (Primary):
-   - Full 2x2 grid, all four panels visible
-   - Drag to rearrange panels
-   - Collapse panels to thin strip or tab
-
- Mac (native SwiftUI):
-   - Full 2x2 grid, resizable window
-   - Same panel arrangement as iPad
-   - Keyboard shortcuts for panel focus
+ iPad / Mac:
+   - Full 2x2 grid, all four panels always visible
+   - Drag to rearrange panels, arrangement synced via iCloud
+   - No panel collapse (future upgrade if user base requests)
+   - Mac: resizable window, keyboard shortcuts for panel focus
 
  iPhone:
-   - Single panel at a time or two-panel split
-   - Swipe or tab navigation between panels
-   - Log + Fair Copy as primary pair, Map + Calendar as secondary
+   - Four full-screen pages, swipe navigation (TabView .page style)
+   - Default page order: Log, Fair Copy, Calendar, Map
+   - Author can rearrange page order to match their workflow
+   - When iPhone Ultra ships (expected 7" foldable + outer screen):
+     outer screen → compact single-panel (quick capture)
+     inner 7" screen → iPad-style 2x2 grid
+     Architecture uses size classes — no special-casing needed
 
  ═══════════════════════════════════════════════════════════════
  SHAKEDOWN PLAN — MAC
@@ -191,9 +238,8 @@
 
  Phase 5 — Panel Layout
    [ ] Drag panels to rearrange — verify persistence
-   [ ] Collapse a panel — verify behavior (strip/tab/hidden)
-   [ ] Restore collapsed panel
    [ ] Resize window — verify panels adapt
+   [ ] Verify panel arrangement persists via iCloud
 
  Phase 6 — Search & Navigation
    [ ] Full-text search across log entries
@@ -225,7 +271,6 @@
    [ ] Verify full 2x2 grid displays correctly in landscape
    [ ] Verify 2x2 grid in portrait — panels may need to stack or scroll
    [ ] Drag to rearrange panels via touch
-   [ ] Collapse/restore panels via touch
    [ ] Test in Split View / Slide Over multitasking
    [ ] Test Stage Manager (if supported on device)
 
@@ -244,8 +289,8 @@
 
  Phase 1 — Core Entry Flow
    [ ] All Mac Phase 1 tests repeated on iPhone
-   [ ] Verify single-panel or two-panel display mode
-   [ ] Verify swipe/tab navigation between panels
+   [ ] Verify four full-screen swipeable pages
+   [ ] Verify default page order: Log, Fair Copy, Calendar, Map
    [ ] Verify hourly line tap targets work on small screen
 
  Phase 2 — Fair Copy / Mirror-Diverge
@@ -254,11 +299,11 @@
    [ ] Audio recording on iPhone
 
  Phase 3 — Panel Navigation (iPhone-specific)
-   [ ] Verify panel switching is intuitive (swipe, tabs, or segmented control)
-   [ ] Log + Fair Copy as primary pair — verify side-by-side or stacked
+   [ ] Verify swipe between pages is smooth and intuitive
+   [ ] Verify page order is rearrangeable
    [ ] Map panel — verify usable on phone screen
    [ ] Calendar panel — verify date selection works at phone size
-   [ ] Verify no panel arrangement drag on iPhone (fixed layout)
+   [ ] Verify page order preference syncs via iCloud
 
  Phase 4 — Location & Map
    [ ] Verify GPS stamp accuracy on iPhone (should be best of all platforms)
@@ -271,15 +316,29 @@
    [ ] Verify hero image and audio sync across all three
 
  ═══════════════════════════════════════════════════════════════
- KNOWN OPEN QUESTIONS
+ EXPORT & IMPORT
  ═══════════════════════════════════════════════════════════════
 
- - Fair copy scope: daily vs user-defined (per week/trip/project) — data model TBD
- - Export formats: plain text, PDF, share sheet — not yet designed
- - App icon and visual identity — not yet decided
- - Panel arrangement persistence: per-device or synced via iCloud?
- - Panel collapse behavior: thin strip, tab, or disappear?
- - iPhone layout: two panels with swipe, or single focused panel?
+ Export:
+   - Print layout with user-customizable formatting (modeled on old iCal print)
+   - Booklet mode: page ordering for fold-and-staple binding (n-up printing)
+   - Share sheet (AirDrop, Messages, Mail, etc.)
+   - Apple Notes export with formatting preserved (via share sheet + attributed text/HTML)
+   - Page range selection
+   - Print to PDF (native macOS/iOS)
+
+ Import:
+   - Evernote ENEX (XML format, well-documented)
+   - Apple Notes (HTML/RTF)
+   - Imported entries land at 0001 on their creation date
+   - Author can manually adjust the hour after import
+   - Additional import formats added based on user demand
+
+ ═══════════════════════════════════════════════════════════════
+ REMAINING OPEN QUESTIONS
+ ═══════════════════════════════════════════════════════════════
+
+ - App icon and visual identity — ChatGPT to design
 
  ═══════════════════════════════════════════════════════════════
  CHANGELOG
@@ -289,5 +348,22 @@
  2026-03-21: Renamed "Receipt" to "Fair Copy" throughout codebase and docs
  2026-03-21: Added live time red line indicator (proportional within current hour row)
  2026-03-21: Added 24H/12H time format toggle in Log panel header
+ 2026-03-21: Q&A session — resolved all open questions:
+             - Fair Copy scope: continuous receipt paper with perforation (FairCopyRun model)
+             - Per-entry structure: title, hero image, body, geo, media (audio/video)
+             - Video thumbnail can supplement or replace hero image
+             - Input methods: typing, dictation, camera — app is agnostic
+             - iPhone: four full-screen swipeable pages (Log, Fair Copy, Calendar, Map)
+             - iPhone Ultra future: outer screen compact, inner 7" gets 2x2 grid via size classes
+             - Panels always visible, no collapse (future upgrade if requested)
+             - Panel arrangement synced via iCloud
+             - Log pane is table of contents / navigation index, not primary writing surface
+             - Title syncs character-by-character between Log and Fair Copy
+             - Return in Log jumps cursor to Fair Copy body
+             - Export: print layout (iCal-style), booklet mode, share sheet, Apple Notes, page range
+             - Import: Evernote ENEX, Apple Notes HTML/RTF, imports land at 0001
+             - Renamed audioFileURL to mediaFileURL, added mediaType field
+             - Added FairCopyRun model for perforation/scope mechanic
+             - Added NSCameraUsageDescription and AVKit framework
 
  */

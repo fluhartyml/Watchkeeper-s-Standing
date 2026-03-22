@@ -30,7 +30,7 @@ struct LogPanelView: View {
         return allEntries.filter { Calendar.current.isDate($0.date, inSameDayAs: start) }
     }
 
-    private func entry(for hour: Int) -> LogEntry? {
+    func entry(for hour: Int) -> LogEntry? {
         entries.first { $0.hour == hour }
     }
 
@@ -48,14 +48,17 @@ struct LogPanelView: View {
                         isCurrentHour: isToday && hour == currentHour,
                         minuteProgress: isToday && hour == currentHour
                             ? Double(currentMinute) / 60.0
-                            : nil
+                            : nil,
+                        onTap: {
+                            selectedHour = hour
+                            ensureEntry(for: hour)
+                        },
+                        onSubmitTitle: {
+                            // Return key in title → jump to Fair Copy body
+                            // This is handled by the Fair Copy pane via focus state
+                        }
                     )
                     .id(hour)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        selectedHour = hour
-                        ensureEntry(for: hour)
-                    }
                     .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
                     .listRowBackground(
                         selectedHour == hour
@@ -152,6 +155,10 @@ struct HourlyLineView: View {
     let use24HourFormat: Bool
     let isCurrentHour: Bool
     let minuteProgress: Double?
+    let onTap: () -> Void
+    let onSubmitTitle: () -> Void
+
+    @State private var editingTitle: String = ""
 
     private var hourLabel: String {
         if use24HourFormat {
@@ -180,7 +187,26 @@ struct HourlyLineView: View {
                     .frame(width: 1)
                     .frame(maxHeight: .infinity)
 
-                if let entry = entry, entry.hasContent {
+                if isSelected, let entry = entry {
+                    // Editable inline title when selected
+                    TextField("", text: $editingTitle, prompt: Text("Title...").foregroundStyle(.quaternary))
+                        .font(.system(.body, design: .default))
+                        .fontWeight(.medium)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .onChange(of: editingTitle) { _, newValue in
+                            entry.title = newValue.isEmpty ? nil : newValue
+                            entry.modifiedAt = Date()
+                        }
+                        .onSubmit {
+                            onSubmitTitle()
+                        }
+                        .onAppear {
+                            editingTitle = entry.title ?? ""
+                        }
+                } else if let entry = entry, entry.hasContent {
+                    // Read-only display when not selected
                     HStack(spacing: 6) {
                         if let title = entry.title, !title.isEmpty {
                             Text(title)
@@ -196,14 +222,20 @@ struct HourlyLineView: View {
                                 .truncationMode(.tail)
                         }
                     }
+                    .contentShape(Rectangle())
+                    .onTapGesture { onTap() }
                 } else {
                     Color.clear
                         .frame(height: 1)
+                        .contentShape(Rectangle())
+                        .onTapGesture { onTap() }
                 }
 
                 Spacer(minLength: 0)
             }
             .frame(height: rowHeight)
+            .contentShape(Rectangle())
+            .onTapGesture { onTap() }
 
             // Red "now" line
             if let progress = minuteProgress {
@@ -214,7 +246,6 @@ struct HourlyLineView: View {
                         .frame(height: 2)
                         .offset(y: yOffset)
 
-                    // Red dot on the left edge
                     Circle()
                         .fill(Color.red)
                         .frame(width: 8, height: 8)
@@ -223,5 +254,24 @@ struct HourlyLineView: View {
             }
         }
         .frame(height: rowHeight)
+        // Sync title from entry when it changes externally (e.g. typed in Fair Copy)
+        .onChange(of: entry?.title) { _, newValue in
+            if !isSelected { return }
+            let incoming = newValue ?? ""
+            if editingTitle != incoming {
+                editingTitle = incoming
+            }
+        }
+    }
+
+    init(hour: Int, entry: LogEntry?, isSelected: Bool, use24HourFormat: Bool, isCurrentHour: Bool, minuteProgress: Double?, onTap: @escaping () -> Void, onSubmitTitle: @escaping () -> Void) {
+        self.hour = hour
+        self.entry = entry
+        self.isSelected = isSelected
+        self.use24HourFormat = use24HourFormat
+        self.isCurrentHour = isCurrentHour
+        self.minuteProgress = minuteProgress
+        self.onTap = onTap
+        self.onSubmitTitle = onSubmitTitle
     }
 }

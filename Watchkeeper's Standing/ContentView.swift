@@ -38,9 +38,9 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var selectedDate: Date = Date()
     @State private var selectedHour: Int?
-    @State private var showingEditor = false
     @State private var use24HourFormat = true
     @Query private var allEntries: [LogEntry]
+    @State private var locationManager = LocationManager()
 
     // Panel positions: index 0=topLeft, 1=topRight, 2=bottomLeft, 3=bottomRight
     @State private var panelLayout: [PanelType] = [.map, .calendar, .log, .fairCopy]
@@ -50,14 +50,6 @@ struct ContentView: View {
     // Resize split ratios (0.0–1.0)
     @State private var horizontalSplit: CGFloat = 0.5
     @State private var verticalSplit: CGFloat = 0.5
-
-    private var selectedEntry: LogEntry? {
-        guard let hour = selectedHour else { return nil }
-        let start = Calendar.current.startOfDay(for: selectedDate)
-        return allEntries.first {
-            Calendar.current.isDate($0.date, inSameDayAs: start) && $0.hour == hour
-        }
-    }
 
     var body: some View {
         GeometryReader { geo in
@@ -69,13 +61,8 @@ struct ContentView: View {
                 gridLayout
             }
         }
-        .sheet(isPresented: $showingEditor) {
-            if let entry = selectedEntry {
-                LogEntryEditorView(entry: entry)
-                    #if os(macOS)
-                    .frame(minWidth: 500, minHeight: 400)
-                    #endif
-            }
+        .onAppear {
+            locationManager.requestPermission()
         }
     }
 
@@ -215,7 +202,7 @@ struct ContentView: View {
             }
     }
 
-    // MARK: - Drag-to-Rearrange Grabber
+    // MARK: - Panel Views
 
     @ViewBuilder
     private func panelView(for type: PanelType) -> some View {
@@ -243,7 +230,7 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Compact Layout (iPhone)
+    // MARK: - Compact Layout (iPhone) — Swipeable Pages
 
     private var compactLayout: some View {
         TabView {
@@ -270,22 +257,22 @@ struct ContentView: View {
                 }
             }
 
+            Tab("Calendar", systemImage: "calendar") {
+                VStack(spacing: 0) {
+                    headerBar
+                    CalendarPanelView(
+                        selectedDate: $selectedDate
+                    )
+                    .padding(8)
+                }
+            }
+
             Tab("Map", systemImage: "map") {
                 VStack(spacing: 0) {
                     headerBar
                     MapPanelView(
                         selectedDate: selectedDate,
                         selectedHour: $selectedHour
-                    )
-                    .padding(8)
-                }
-            }
-
-            Tab("Calendar", systemImage: "calendar") {
-                VStack(spacing: 0) {
-                    headerBar
-                    CalendarPanelView(
-                        selectedDate: $selectedDate
                     )
                     .padding(8)
                 }
@@ -306,19 +293,6 @@ struct ContentView: View {
             }
 
             Spacer()
-
-            Button {
-                if selectedEntry != nil {
-                    showingEditor = true
-                } else if let hour = selectedHour {
-                    let newEntry = LogEntry(date: selectedDate, hour: hour)
-                    modelContext.insert(newEntry)
-                    showingEditor = true
-                }
-            } label: {
-                Image(systemName: "square.and.pencil")
-            }
-            .disabled(selectedHour == nil)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -365,5 +339,5 @@ struct PanelDropDelegate: DropDelegate {
 
 #Preview {
     ContentView()
-        .modelContainer(for: LogEntry.self, inMemory: true)
+        .modelContainer(for: [LogEntry.self, FairCopyRun.self], inMemory: true)
 }
