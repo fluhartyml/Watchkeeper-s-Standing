@@ -116,15 +116,30 @@ struct LogPanelView: View {
                             .fill(Color.secondary.opacity(0.12))
                     )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderless)
+            .contentShape(Rectangle())
 
             Spacer()
 
             if isToday {
-                Text(currentTimeString)
-                    .font(.system(.caption, design: .monospaced))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.red)
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    let components = Calendar.current.dateComponents([.hour, .minute], from: context.date)
+                    let h = components.hour ?? 0
+                    let m = components.minute ?? 0
+                    let timeString: String = {
+                        if use24HourFormat {
+                            return String(format: "%02d:%02d", h, m)
+                        } else {
+                            let displayHour = ((h - 1) % 12) + 1
+                            let ampm = h < 12 ? "AM" : "PM"
+                            return String(format: "%d:%02d %@", displayHour, m, ampm)
+                        }
+                    }()
+                    Text(timeString)
+                        .font(.system(.caption, design: .monospaced))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.red)
+                }
             }
 
             Spacer()
